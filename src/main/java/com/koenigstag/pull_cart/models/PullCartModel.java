@@ -53,6 +53,8 @@ public class PullCartModel<T extends Entity> extends EntityModel<T> {
   @Override
   public void setupAnim(T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw,
       float headPitch) {
+    // Устанавливаем поворот повозки в зависимости от поворота головы ее ентити
+    cart.yRot = netHeadYaw * ((float) Math.PI / 180F);
     // Устанавливаем вращение колёс в зависимости от скорости
     float rotation = ageInTicks * 10; // Скорость вращения колёс, можно настроить
     leftWheel.yRot = rotation;

@@ -19,7 +19,7 @@ public class ModEntities {
 
     public static final RegistryObject<EntityType<PullCart>> PULL_CART = ENTITIES.register("pull_cart",
             () -> EntityType.Builder.<PullCart>of(PullCart::new, MobCategory.MISC)
-                    .sized(1.375f, 0.5625f) // Размеры лодки (ширина, высота)
+                    .sized(1.375f, 1.2f) // Размеры лодки (ширина, высота)
                     .build("pull_cart"));
 
     public static void register(IEventBus modEventBus) {

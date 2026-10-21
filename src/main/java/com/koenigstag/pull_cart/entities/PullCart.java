@@ -1,20 +1,18 @@
 package com.koenigstag.pull_cart.entities;
 
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.monster.piglin.PiglinAi;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.vehicle.ChestBoat;
+import net.minecraft.world.entity.vehicle.MinecartChest;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,14 +20,18 @@ import java.util.UUID;
 
 import com.koenigstag.pull_cart.PullCartMod;
 
-@Mod.EventBusSubscriber(modid = PullCartMod.MODID, value = Dist.DEDICATED_SERVER)
-public class PullCart extends ChestBoat {
+// @Mod.EventBusSubscriber(modid = PullCartMod.MODID, value = Dist.DEDICATED_SERVER)
+public class PullCart extends MinecartChest {
 
-    private UUID followingPlayerId = null;
+    private Entity pulling = null;
+
+    private double minPullDistance = 2;
+    private double maxPullDistance = 5;
+    private double pullSpeed = 0.5;
 
     private static Map<UUID, PullCart> playerCartMap = new HashMap<>();
 
-    public PullCart(EntityType<? extends ChestBoat> type, Level world) {
+    public PullCart(EntityType<? extends MinecartChest> type, Level world) {
         super(type, world);
     }
 
@@ -37,27 +39,64 @@ public class PullCart extends ChestBoat {
     public void tick() {
         super.tick();
 
-        // Замедлить и топить в воде
-        if (this.isInWater()) {
-            Vec3 deltaMovement = this.getDeltaMovement();
-            this.setDeltaMovement(0, deltaMovement.y - 0.05, 0);
-            return;
+        if (pulling == null) {
+            this.setDeltaMovement(new Vec3(0, -0.5, 0));
+        } else if (!pulling.isRemoved()) {
+            Level level = pulling.level();
+
+            if (!level.isClientSide) {
+                PullCart cart = playerCartMap.get(pulling.getUUID());
+                if (cart != null) {
+                    Vec3 playerPos = pulling.position();
+                    Vec3 cartPos = cart.position();
+                    double distance = playerPos.distanceTo(cartPos);
+
+                    // Если повозка далеко, отцепляем её от игрока
+                    if (distance >= maxPullDistance || !cart.isFollowingEntity(pulling)) {
+                        cart.stopFollowingPlayer(pulling);
+                    } else if (distance > minPullDistance && distance < maxPullDistance) {
+                        this.pullToEntityPos(pulling);
+                    }
+                }
+            }
         }
 
         this.move(MoverType.SELF, this.getDeltaMovement());
     }
 
-    public void pullToPlayerPos(Player player) {
-        // Запретить тянуть если в воде или чужая повозка
-        if (isInWater() || player == null || !isFollowingPlayer(player))
+    public void pullToEntityPos(Entity entity) {
+        if (entity == null || !isFollowingEntity(entity))
             return;
 
-        Vec3 direction = player.position().subtract(this.position()).normalize().scale(0.1); // Настроить скорость
-        this.setDeltaMovement(direction);
+        // Тянем повозку к игроку
+        Vec3 direction = entity.position().subtract(this.position());
+        double currentDistance = direction.length(); // Текущее расстояние до игрока
+
+        if (currentDistance > minPullDistance) {
+            // Нормализуем вектор и масштабируем его, чтобы оставалось 2 блока до игрока
+            Vec3 movement = direction.normalize().scale(currentDistance - minPullDistance);
+            // Меняем скорость движения повозки по x и z
+            // Обновляем y-координату движения, чтобы выровнять повозку по высоте игрока
+            movement = new Vec3(movement.scale(pullSpeed).x, entity.position().y - this.position().y,
+                    movement.scale(pullSpeed).z);
+            this.setDeltaMovement(movement); // Дополнительно можно уменьшить скорость
+        } else {
+            this.setDeltaMovement(Vec3.ZERO); // Останавливаем повозку, если она на нужном расстоянии
+        }
+
+        // Поворачиваем повозку в сторону игрока
+        // Рассчитываем направление движения повозки
+        Vec3 deltaMovement = this.getDeltaMovement();
+        if (deltaMovement.lengthSqr() > 0.0001) { // Проверяем, что движение происходит
+            // Вычисляем угол поворота в зависимости от направления движения
+            double rotationAngle = Math.toDegrees(Math.atan2(-deltaMovement.x, deltaMovement.z));
+            this.setYRot((float) rotationAngle);
+            this.yRotO = this.getYRot(); // Синхронизация поворота с предыдущим тиком, чтобы избежать дерганий
+        }
     }
 
-    public boolean isFollowingPlayer(Player player) {
-        return followingPlayerId != null && followingPlayerId.equals(player.getUUID());
+    public boolean isFollowingEntity(Entity entity) {
+        return pulling != null && pulling.getUUID().equals(entity.getUUID());
     }
 
     @Override
@@ -65,6 +104,12 @@ public class PullCart extends ChestBoat {
         Level level = player.level();
 
         if (!level.isClientSide && hand == InteractionHand.OFF_HAND) {
+            double distance = player.position().distanceTo(this.position());
+
+            if (distance >= minPullDistance) {
+                return InteractionResult.PASS;
+            }
+
             // Открываем инвентарь только при Shift + ПКМ
             if (player.isShiftKeyDown()) {
                 InteractionResult interactionResult = this.interactWithContainerVehicle(player);
@@ -77,7 +122,7 @@ public class PullCart extends ChestBoat {
                 return interactionResult;
             }
 
-            if (followingPlayerId == null) {
+            if (pulling == null) {
                 startFollowingPlayer(player);
             } else {
                 stopFollowingPlayer(player);
@@ -89,36 +134,28 @@ public class PullCart extends ChestBoat {
         return InteractionResult.PASS;
     }
 
-    public UUID getFollowingPlayerId() {
-        return followingPlayerId;
+    public Entity getPullingEntity() {
+        return pulling;
     }
 
-    private void startFollowingPlayer(Player player) {
-        if (followingPlayerId != null)
+    private void startFollowingPlayer(Entity entity) {
+        if (pulling != null || PullCart.playerCartMap.containsKey(entity.getUUID()))
             return;
 
-        UUID id = player.getUUID();
-        followingPlayerId = id;
-        PullCart.playerCartMap.put(id, this);
-        player.displayClientMessage(Component.literal("Теперь повозка следует за вами."), true);
+        pulling = entity;
+        PullCart.playerCartMap.put(entity.getUUID(), this);
+
+        if (entity instanceof Player)
+            ((Player) entity).displayClientMessage(Component.literal("Теперь повозка следует за вами."), true);
     }
 
-    public void stopFollowingPlayer(Player player) {
-        if (isFollowingPlayer(player)) {
-            followingPlayerId = null;
-            PullCart.playerCartMap.remove(player.getUUID());
+    public void stopFollowingPlayer(Entity entity) {
+        if (isFollowingEntity(entity)) {
+            pulling = null;
+            PullCart.playerCartMap.remove(entity.getUUID());
 
-            player.displayClientMessage(Component.literal("Теперь повозка остановилась."), true);
-        }
-    }
-
-    @Override
-    public void openCustomInventoryScreen(Player player) {
-        player.openMenu(this);
-        Level level = player.level();
-        if (!level.isClientSide) {
-            this.gameEvent(GameEvent.CONTAINER_OPEN, player);
-            PiglinAi.angerNearbyPiglins(player, true);
+            if (entity instanceof Player)
+                ((Player) entity).displayClientMessage(Component.literal("Теперь повозка остановилась."), true);
         }
     }
 
@@ -128,25 +165,21 @@ public class PullCart extends ChestBoat {
         return false; // Повозка не транспорт
     }
 
-    @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        Player player = event.player;
-        Level level = player.level();
+    protected Item getDropItem() {
+        return PullCartMod.PULL_CART_ITEM.get();
+    }
 
-        if (!level.isClientSide) {
-            PullCart cart = playerCartMap.get(player.getUUID());
-            if (cart != null) {
-                Vec3 playerPos = player.position();
-                Vec3 cartPos = cart.position();
-                double distance = playerPos.distanceTo(cartPos);
+    public boolean isPushable() {
+        return false;
+    }
 
-                // Если повозка далеко, отцепляем её от игрока
-                if (distance > 5 || !cart.isFollowingPlayer(player)) {
-                    cart.stopFollowingPlayer(player);
-                } else if (distance > 1 && distance <= 5) {
-                    cart.pullToPlayerPos(player);
-                }
-            }
-        }
+    @Override
+    public boolean canCollideWith(Entity entity) {
+        return pulling == null;
+    }
+
+    @Override
+    public boolean canBeCollidedWith() {
+        return pulling == null;
     }
 }
