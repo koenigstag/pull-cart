@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "#forge:slimeballs",
+    {
+      "id": "tfc:glue",
+      "required": false
+    }
+  ]
+}

@@ -1,55 +1,66 @@
 package com.koenigstag.pull_cart;
 
-import com.koenigstag.pull_cart.entities.ModEntities;
-import com.koenigstag.pull_cart.renderer.ModEntityRenderers;
+import com.koenigstag.pull_cart.client.PullCartClient;
 import com.mojang.logging.LogUtils;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import org.slf4j.Logger;
 
-// The value here should match an entry in the META-INF/mods.toml file
-@Mod(PullCartMod.MODID)
-public class PullCartMod {
-    public static final String MODID = "pull_cart";
+/**
+ * A wooden cart you pull by hand. A Minecraft 1.20.1 port of MC+ Cart and MC+ Wheel by andykuo1 (GPL-2.0,
+ * github.com/andykuo1/mcplus-mods), the cart TFC.SU played with on 1.7.10.
+ */
+@Mod(PullCartMod.MOD_ID)
+public final class PullCartMod {
+    public static final String MOD_ID = "pull_cart";
     public static final Logger LOGGER = LogUtils.getLogger();
+    public static final boolean TFC = ModList.get().isLoaded("tfc");
 
-    public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MODID);
+    private static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
+            DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MOD_ID);
+    private static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MOD_ID);
 
-    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister
-            .create(Registries.CREATIVE_MODE_TAB, MODID);
-
-    public static final RegistryObject<Item> PULL_CART_ITEM = ITEMS.register("pull_cart_item",
+    public static final RegistryObject<EntityType<CartEntity>> CART = ENTITY_TYPES.register("wooden_cart",
+            () -> EntityType.Builder.<CartEntity>of(CartEntity::new, MobCategory.MISC)
+                    // Narrower than the model, so it follows you through one-block passages.
+                    .sized(0.98f, 0.8f)
+                    .clientTrackingRange(10)
+                    .updateInterval(2)
+                    .build(MOD_ID + ":wooden_cart"));
+    public static final RegistryObject<Item> CART_ITEM = ITEMS.register("wooden_cart",
+            () -> new CartItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> WHEEL = ITEMS.register("wooden_wheel",
             () -> new Item(new Item.Properties()));
 
-    public static final RegistryObject<CreativeModeTab> EXAMPLE_TAB = CREATIVE_MODE_TABS.register("example_tab",
-            () -> CreativeModeTab.builder()
-                    .withTabsBefore(CreativeModeTabs.COMBAT)
-                    .icon(() -> PULL_CART_ITEM.get().getDefaultInstance())
-                    .displayItems((parameters, output) -> {
-                        output.accept(PULL_CART_ITEM.get());
-                    }).build());
+    public PullCartMod(FMLJavaModLoadingContext context) {
+        IEventBus modBus = context.getModEventBus();
+        ENTITY_TYPES.register(modBus);
+        ITEMS.register(modBus);
+        modBus.addListener(PullCartMod::onCreativeTabs);
+        context.registerConfig(ModConfig.Type.COMMON, PullCartConfig.SPEC);
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            PullCartClient.init(modBus);
+        }
+    }
 
-    public PullCartMod() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-
-        ITEMS.register(modEventBus);
-        CREATIVE_MODE_TABS.register(modEventBus);
-        ModEntities.register(modEventBus);
-
-        MinecraftForge.EVENT_BUS.register(this);
-        MinecraftForge.EVENT_BUS.register(ModEntityRenderers.class);
-
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+    private static void onCreativeTabs(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
+            event.accept(CART_ITEM);
+        } else if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
+            event.accept(WHEEL);
+        }
     }
 }

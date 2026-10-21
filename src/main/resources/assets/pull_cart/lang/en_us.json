@@ -1,0 +1,13 @@
+{
+  "item.pull_cart.wooden_cart": "Wooden Cart",
+  "item.pull_cart.wooden_wheel": "Wooden Wheel",
+  "entity.pull_cart.wooden_cart": "Wooden Cart",
+  "message.pull_cart.hitched": "You pull the cart. Right-click it again to let go.",
+  "message.pull_cart.let_go": "You let go of the cart.",
+  "message.pull_cart.too_far": "The cart got stuck behind you, so you let go of it.",
+  "message.pull_cart.someone_else": "%s is pulling this cart.",
+  "message.pull_cart.too_heavy": "Too heavy to pull: %s huge, very heavy items in the chest (at most %s).",
+  "message.pull_cart.loaded": "The cart is already loaded.",
+  "message.pull_cart.too_big": "%s is too big for the cart.",
+  "message.pull_cart.playing": "The jukebox is playing: the cart stays here until the song ends or you take the disc."
+}

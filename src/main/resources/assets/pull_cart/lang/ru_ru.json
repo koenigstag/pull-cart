@@ -1,0 +1,13 @@
+{
+  "item.pull_cart.wooden_cart": "Тележка",
+  "item.pull_cart.wooden_wheel": "Деревянное колесо",
+  "entity.pull_cart.wooden_cart": "Тележка",
+  "message.pull_cart.hitched": "Вы тянете тележку. ПКМ по ней ещё раз — отпустить.",
+  "message.pull_cart.let_go": "Вы отпустили тележку.",
+  "message.pull_cart.too_far": "Тележка застряла позади, вы её отпустили.",
+  "message.pull_cart.someone_else": "Эту тележку тянет %s.",
+  "message.pull_cart.too_heavy": "Слишком тяжело: %s огромных очень тяжёлых предметов в сундуке (можно не больше %s).",
+  "message.pull_cart.loaded": "Тележка уже загружена.",
+  "message.pull_cart.too_big": "%s слишком велик для тележки.",
+  "message.pull_cart.playing": "Играет проигрыватель: тележка стоит, пока не кончится песня или вы не заберёте пластинку."
+}
