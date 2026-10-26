@@ -2,6 +2,7 @@ package com.koenigstag.pull_cart;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -26,6 +27,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -103,6 +105,9 @@ public class LoomBlock extends BaseEntityBlock {
         if (!state.is(newState.getBlock())) {
             if (level.getBlockEntity(pos) instanceof LoomBlockEntity loom) {
                 Containers.dropContents(level, pos, loom);
+                if (level instanceof ServerLevel server) {
+                    loom.popExperience(server, Vec3.atCenterOf(pos));
+                }
                 level.updateNeighbourForOutputSignal(pos, this);
             }
         }

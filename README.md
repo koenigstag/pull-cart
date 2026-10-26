@@ -29,9 +29,46 @@ MC+ Loom's loom: it spins wool into string, like a furnace with two fuel slots.
 - A block of wool (any colour) becomes 4 string in 20 seconds.
 - Spindles: a stick (10 seconds), a blaze rod (40 seconds) or shears (160 seconds). Both slots need one. The loom
   uses one from each slot at a time and runs for as long as the two last together. Two sticks spin one block of wool.
-- While it spins, the wheel turns and puffs of smoke rise, as in MC+ Loom. Taking string out gives a little experience.
+- While it spins, the wheel turns and puffs of smoke rise, as in MC+ Loom. Taking the result out gives the experience
+  it earned, as a furnace does.
 - Hoppers put wool in from the top and spindles in from the sides, and take string out from the bottom. A comparator
   reads how full it is. When broken, it drops itself and what it holds.
+
+### Loom recipes (datapacks)
+
+What the loom spins and what it takes as spindles are recipes, so a datapack (or KubeJS, CraftTweaker) can add,
+change or remove them. They live in `data/<namespace>/recipes/`.
+
+`pull_cart:spinning`: one item on top becomes `result`. `experience` is earned for each item spun and
+`spinning_time` is in ticks (400, 20 seconds, if left out).
+
+```json
+{
+  "type": "pull_cart:spinning",
+  "ingredient": {"item": "tfc:wool"},
+  "result": {"item": "tfc:wool_yarn", "count": 8},
+  "experience": 2.0,
+  "spinning_time": 400
+}
+```
+
+`pull_cart:spindle`: an item the loom takes as a spindle, and for how many ticks it turns the loom (`duration`).
+A spindle is used up. With `damage`, a spindle that can be damaged takes that much damage instead, and breaks when
+it runs out.
+
+```json
+{
+  "type": "pull_cart:spindle",
+  "ingredient": {"item": "tfc:spindle"},
+  "duration": 400,
+  "damage": 1
+}
+```
+
+The mod's own recipes are `pull_cart:spinning/wool`, `pull_cart:spindles/stick`, `pull_cart:spindles/blaze_rod` and
+`pull_cart:spindles/shears`. To change or remove one, put a file at the same path in a datapack. Make it an empty
+recipe (`{"conditions": [{"type": "forge:false"}]}`) to remove it. When two recipes match the same item, either one may
+be used, so change the mod's recipe rather than adding a second one for the same item.
 
 ## Crafting
 
@@ -44,7 +81,10 @@ MC+ Loom's loom: it spins wool into string, like a furnace with two fuel slots.
 - The cart is a huge, very heavy item, like an anvil: no TFC chest, vessel or barrel takes it, and it can't be put
   on the ground with V (only set down as a cart). Like an anvil, carrying one exhausts you and two overburden you.
   The wheel is large and medium. The loom is large and very heavy, like TFC's own loom.
-- The loom also takes TFC's twigs and metal shears as spindles.
+- The loom spins TFC wool into 8 wool yarn (as a spindle does by hand) and takes TFC spindles: one turns it for 20
+  seconds and loses 1 durability each time, so two spindles spin 2 wool per use and 80 wool before they break. It
+  also takes TFC's twigs and metal shears as spindles, used up like sticks and shears. (`pull_cart:spinning/tfc_wool`
+  and `pull_cart:spindles/tfc_spindle`, only loaded with TFC.)
 - A chest on the cart holding more than 4 huge, very heavy items (anvils, carts and the like) is too heavy to pull
   (`tfc.maxHeavyItems` in `config/pull_cart-common.toml`).
 

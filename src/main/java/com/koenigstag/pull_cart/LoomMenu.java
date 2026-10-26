@@ -1,10 +1,8 @@
 package com.koenigstag.pull_cart;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -12,10 +10,11 @@ import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
 /**
- * The loom's screen, laid out as MC+ Loom's ContainerLoom: wool on top, the two spindles under it, string on the
- * right. Taking string out gives experience, as taking from a furnace does.
+ * The loom's screen, laid out as MC+ Loom's ContainerLoom: what to spin on top, the two spindles under it, the result
+ * on the right. Taking the result out gives the experience earned, as taking from a furnace does.
  */
 public class LoomMenu extends AbstractContainerMenu {
     private static final int PLAYER_START = 4;
@@ -24,21 +23,23 @@ public class LoomMenu extends AbstractContainerMenu {
 
     private final Container loom;
     private final ContainerData data;
+    private final Level level;
 
     /** The client side, filled in by the server. */
     public LoomMenu(int id, Inventory inventory) {
-        this(id, inventory, new SimpleContainer(4), new SimpleContainerData(3));
+        this(id, inventory, new SimpleContainer(4), new SimpleContainerData(4));
     }
 
     LoomMenu(int id, Inventory inventory, Container loom, ContainerData data) {
         super(PullCartMod.LOOM_MENU.get(), id);
         checkContainerSize(loom, 4);
-        checkContainerDataCount(data, 3);
+        checkContainerDataCount(data, 4);
         this.loom = loom;
         this.data = data;
+        this.level = inventory.player.level();
         addSlot(new Slot(loom, LoomBlockEntity.INPUT, 56, 17));
-        addSlot(new SpindleSlot(loom, LoomBlockEntity.SPINDLE_A, 47, 53));
-        addSlot(new SpindleSlot(loom, LoomBlockEntity.SPINDLE_B, 65, 53));
+        addSlot(new SpindleSlot(level, loom, LoomBlockEntity.SPINDLE_A, 47, 53));
+        addSlot(new SpindleSlot(level, loom, LoomBlockEntity.SPINDLE_B, 65, 53));
         addSlot(new ResultSlot(inventory.player, loom, LoomBlockEntity.RESULT, 116, 35));
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
@@ -55,15 +56,16 @@ public class LoomMenu extends AbstractContainerMenu {
         return data.get(1) > 0;
     }
 
-    /** 0 to {@code width}: how far the wool on top has been spun. */
+    /** 0 to {@code width}: how far the item on top has been spun. */
     public int spinProgress(int width) {
-        return data.get(0) * width / LoomBlockEntity.SPIN_TIME;
+        int total = data.get(3);
+        return data.get(0) * width / (total == 0 ? SpinningRecipe.DEFAULT_SPINNING_TIME : total);
     }
 
     /** 0 to {@code height}: how much of the spindles' time is left. */
     public int burnLeft(int height) {
         int duration = data.get(2);
-        return data.get(1) * height / (duration == 0 ? LoomBlockEntity.SPIN_TIME : duration);
+        return data.get(1) * height / (duration == 0 ? SpinningRecipe.DEFAULT_SPINNING_TIME : duration);
     }
 
     @Override
@@ -85,11 +87,11 @@ public class LoomMenu extends AbstractContainerMenu {
             }
             slot.onQuickCraft(stack, original);
         } else if (index >= PLAYER_START) {
-            if (!LoomBlockEntity.spun(stack).isEmpty()) {
+            if (SpinningRecipe.find(level, stack) != null) {
                 if (!moveItemStackTo(stack, LoomBlockEntity.INPUT, LoomBlockEntity.INPUT + 1, false)) {
                     return ItemStack.EMPTY;
                 }
-            } else if (LoomBlockEntity.isSpindle(stack)) {
+            } else if (SpindleRecipe.find(level, stack) != null) {
                 if (!moveItemStackTo(stack, LoomBlockEntity.SPINDLE_A, LoomBlockEntity.SPINDLE_B + 1, false)) {
                     return ItemStack.EMPTY;
                 }
@@ -116,17 +118,20 @@ public class LoomMenu extends AbstractContainerMenu {
     }
 
     private static final class SpindleSlot extends Slot {
-        SpindleSlot(Container container, int slot, int x, int y) {
+        private final Level level;
+
+        SpindleSlot(Level level, Container container, int slot, int x, int y) {
             super(container, slot, x, y);
+            this.level = level;
         }
 
         @Override
         public boolean mayPlace(ItemStack stack) {
-            return LoomBlockEntity.isSpindle(stack);
+            return SpindleRecipe.find(level, stack) != null;
         }
     }
 
-    /** MC+ Loom's SlotLoom: nothing goes in, and what comes out gives experience. */
+    /** MC+ Loom's SlotLoom: nothing goes in, and taking out gives the loom's experience. */
     private static final class ResultSlot extends Slot {
         private final Player player;
         private int removeCount;
@@ -164,13 +169,8 @@ public class LoomMenu extends AbstractContainerMenu {
         @Override
         protected void checkTakeAchievements(ItemStack stack) {
             stack.onCraftedBy(player.level(), player, removeCount);
-            if (player instanceof ServerPlayer server) {
-                float experience = removeCount * LoomBlockEntity.EXPERIENCE;
-                int orbs = Mth.floor(experience);
-                if (Math.random() < experience - orbs) {
-                    orbs++;
-                }
-                ExperienceOrb.award(server.serverLevel(), server.position(), orbs);
+            if (player instanceof ServerPlayer server && container instanceof LoomBlockEntity loom) {
+                loom.popExperience(server.serverLevel(), server.position());
             }
             removeCount = 0;
         }

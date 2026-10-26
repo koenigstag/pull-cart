@@ -1,0 +1,14 @@
+{
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "tfc"
+    }
+  ],
+  "type": "pull_cart:spindle",
+  "ingredient": {
+    "item": "tfc:spindle"
+  },
+  "duration": 400,
+  "damage": 1
+}

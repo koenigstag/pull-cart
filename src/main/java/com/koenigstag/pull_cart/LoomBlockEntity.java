@@ -6,23 +6,24 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.WorldlyContainer;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.common.Tags;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
@@ -31,19 +32,16 @@ import net.minecraftforge.items.wrapper.SidedInvWrapper;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * MC+ Loom's wooden loom (TileEntityLoom, andykuo1, GPL-2.0): it spins a block of wool into 4 string in 20 seconds. It
- * works like a furnace whose fuel is two spindles at once (a stick, a blaze rod or shears in each slot): both are used
- * up together and turn it for as long as the two of them last.
+ * MC+ Loom's wooden loom (TileEntityLoom, andykuo1, GPL-2.0): it spins what goes on top by a {@link SpinningRecipe}
+ * (a block of wool into 4 string in 20 seconds). It works like a furnace whose fuel is two spindles at once
+ * ({@link SpindleRecipe}: a stick, a blaze rod or shears in each slot): both are used together and turn it for as long
+ * as the two of them last.
  */
 public class LoomBlockEntity extends BaseContainerBlockEntity implements WorldlyContainer {
     public static final int INPUT = 0;
     public static final int SPINDLE_A = 1;
     public static final int SPINDLE_B = 2;
     public static final int RESULT = 3;
-    /** Ticks to spin one block of wool. */
-    public static final int SPIN_TIME = 400;
-    /** Experience for each string taken out. */
-    static final float EXPERIENCE = 0.5f;
     /** MC+ Loom turned the wheel 0.008 radians a frame; this is that at 60 frames a second. */
     private static final float WHEEL_SPEED = 0.024f;
 
@@ -55,6 +53,9 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     private int burnTime;
     private int burnDuration;
     private int spinTime;
+    private int spinTotalTime = SpinningRecipe.DEFAULT_SPINNING_TIME;
+    /** Earned by what it spun, given to the next player who takes the result out. */
+    private float experience;
     private float wheelAngle;
     private float wheelAngleO;
     private LazyOptional<? extends IItemHandlerModifiable>[] handlers =
@@ -67,6 +68,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
                 case 0 -> spinTime;
                 case 1 -> burnTime;
                 case 2 -> burnDuration;
+                case 3 -> spinTotalTime;
                 default -> 0;
             };
         }
@@ -77,6 +79,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
                 case 0 -> spinTime = value;
                 case 1 -> burnTime = value;
                 case 2 -> burnDuration = value;
+                case 3 -> spinTotalTime = value;
                 default -> {
                 }
             }
@@ -84,7 +87,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
 
         @Override
         public int getCount() {
-            return 3;
+            return 4;
         }
     };
 
@@ -92,49 +95,29 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
         super(PullCartMod.LOOM_BLOCK_ENTITY.get(), pos, state);
     }
 
-    /** How many ticks a spindle turns the loom; 0 if the item isn't one. */
-    public static int spindleTime(ItemStack stack) {
-        if (stack.is(Tags.Items.RODS_WOODEN)) {
-            return 200;
-        }
-        if (stack.is(Tags.Items.RODS_BLAZE)) {
-            return 800;
-        }
-        if (stack.is(Tags.Items.SHEARS)) {
-            return 3200;
-        }
-        return 0;
-    }
-
-    public static boolean isSpindle(ItemStack stack) {
-        return spindleTime(stack) > 0;
-    }
-
-    /** What the loom makes of the item, or empty: any wool, 4 string. */
-    public static ItemStack spun(ItemStack input) {
-        return input.is(ItemTags.WOOL) ? new ItemStack(Items.STRING, 4) : ItemStack.EMPTY;
-    }
-
     public static void serverTick(Level level, BlockPos pos, BlockState state, LoomBlockEntity loom) {
         boolean changed = false;
         if (loom.burnTime > 0) {
             loom.burnTime--;
         }
-        if (loom.burnTime == 0 && loom.canSpin()) {
-            int a = spindleTime(loom.items.get(SPINDLE_A));
-            int b = spindleTime(loom.items.get(SPINDLE_B));
-            if (a > 0 && b > 0) {
-                loom.burnTime = loom.burnDuration = a + b;
-                loom.useSpindle(SPINDLE_A);
-                loom.useSpindle(SPINDLE_B);
+        SpinningRecipe recipe = SpinningRecipe.find(level, loom.items.get(INPUT));
+        boolean canSpin = recipe != null && loom.fits(recipe.result());
+        if (loom.burnTime == 0 && canSpin) {
+            SpindleRecipe a = SpindleRecipe.find(level, loom.items.get(SPINDLE_A));
+            SpindleRecipe b = SpindleRecipe.find(level, loom.items.get(SPINDLE_B));
+            if (a != null && b != null) {
+                loom.burnTime = loom.burnDuration = a.duration() + b.duration();
+                loom.useSpindle(SPINDLE_A, a, level.random);
+                loom.useSpindle(SPINDLE_B, b, level.random);
                 changed = true;
             }
         }
-        boolean working = loom.burnTime > 0 && loom.canSpin();
+        boolean working = loom.burnTime > 0 && canSpin;
         if (working) {
-            if (++loom.spinTime >= SPIN_TIME) {
+            loom.spinTotalTime = recipe.spinningTime();
+            if (++loom.spinTime >= loom.spinTotalTime) {
                 loom.spinTime = 0;
-                loom.spin();
+                loom.spin(recipe);
                 level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 0.05f, 0.6f);
                 changed = true;
             }
@@ -173,35 +156,47 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
         return Mth.lerp(partialTick, wheelAngleO, wheelAngle);
     }
 
-    private boolean canSpin() {
-        ItemStack result = spun(items.get(INPUT));
-        if (result.isEmpty()) {
-            return false;
-        }
+    private boolean fits(ItemStack result) {
         ItemStack out = items.get(RESULT);
         return out.isEmpty() || ItemStack.isSameItemSameTags(out, result)
                 && out.getCount() + result.getCount() <= out.getMaxStackSize();
     }
 
-    private void spin() {
-        ItemStack input = items.get(INPUT);
-        ItemStack result = spun(input);
+    private void spin(SpinningRecipe recipe) {
         ItemStack out = items.get(RESULT);
         if (out.isEmpty()) {
-            items.set(RESULT, result);
+            items.set(RESULT, recipe.result().copy());
         } else {
-            out.grow(result.getCount());
+            out.grow(recipe.result().getCount());
         }
-        input.shrink(1);
+        items.get(INPUT).shrink(1);
+        experience += recipe.experience();
     }
 
-    private void useSpindle(int slot) {
-        ItemStack spindle = items.get(slot);
-        ItemStack remainder = spindle.getCraftingRemainingItem();
-        spindle.shrink(1);
-        if (spindle.isEmpty()) {
+    private void useSpindle(int slot, SpindleRecipe spindle, RandomSource random) {
+        ItemStack stack = items.get(slot);
+        if (spindle.damage() > 0 && stack.isDamageableItem()) {
+            if (stack.hurt(spindle.damage(), random, null)) {
+                stack.shrink(1);
+            }
+            return;
+        }
+        ItemStack remainder = stack.getCraftingRemainingItem();
+        stack.shrink(1);
+        if (stack.isEmpty()) {
             items.set(slot, remainder);
         }
+    }
+
+    /** Gives out the experience earned so far, as orbs at {@code pos}. */
+    public void popExperience(ServerLevel level, Vec3 pos) {
+        int orbs = Mth.floor(experience);
+        if (level.random.nextFloat() < Mth.frac(experience)) {
+            orbs++;
+        }
+        experience = 0;
+        ExperienceOrb.award(level, pos, orbs);
+        setChanged();
     }
 
     @Override
@@ -212,6 +207,8 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
         burnTime = tag.getInt("BurnTime");
         burnDuration = tag.getInt("BurnDuration");
         spinTime = tag.getInt("SpinTime");
+        spinTotalTime = tag.contains("SpinTimeTotal") ? tag.getInt("SpinTimeTotal") : SpinningRecipe.DEFAULT_SPINNING_TIME;
+        experience = tag.getFloat("Experience");
     }
 
     @Override
@@ -221,6 +218,8 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
         tag.putInt("BurnTime", burnTime);
         tag.putInt("BurnDuration", burnDuration);
         tag.putInt("SpinTime", spinTime);
+        tag.putInt("SpinTimeTotal", spinTotalTime);
+        tag.putFloat("Experience", experience);
     }
 
     @Override
@@ -262,9 +261,13 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
 
     @Override
     public void setItem(int slot, ItemStack stack) {
+        boolean sameInput = slot == INPUT && ItemStack.isSameItemSameTags(stack, items.get(INPUT));
         items.set(slot, stack);
         if (stack.getCount() > getMaxStackSize()) {
             stack.setCount(getMaxStackSize());
+        }
+        if (slot == INPUT && !sameInput) {
+            spinTime = 0; // something else starts spinning from scratch, as in a furnace
         }
     }
 
@@ -272,7 +275,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     public boolean canPlaceItem(int slot, ItemStack stack) {
         return switch (slot) {
             case RESULT -> false;
-            case SPINDLE_A, SPINDLE_B -> isSpindle(stack);
+            case SPINDLE_A, SPINDLE_B -> level != null && SpindleRecipe.find(level, stack) != null;
             default -> true;
         };
     }
@@ -287,7 +290,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
         items.clear();
     }
 
-    // Hoppers: wool in from the top, spindles from the sides, string out of the bottom.
+    // Hoppers: what to spin in from the top, spindles from the sides, the result out of the bottom.
 
     @Override
     public int[] getSlotsForFace(Direction side) {

@@ -2,11 +2,14 @@ package com.koenigstag.pull_cart;
 
 import com.koenigstag.pull_cart.client.PullCartClient;
 import com.mojang.logging.LogUtils;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.crafting.RecipeSerializer;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -46,6 +49,10 @@ public final class PullCartMod {
     private static final DeferredRegister<MenuType<?>> MENU_TYPES =
             DeferredRegister.create(ForgeRegistries.MENU_TYPES, MOD_ID);
     private static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MOD_ID);
+    private static final DeferredRegister<RecipeType<?>> RECIPE_TYPES =
+            DeferredRegister.create(ForgeRegistries.RECIPE_TYPES, MOD_ID);
+    private static final DeferredRegister<RecipeSerializer<?>> RECIPE_SERIALIZERS =
+            DeferredRegister.create(ForgeRegistries.RECIPE_SERIALIZERS, MOD_ID);
 
     public static final RegistryObject<EntityType<CartEntity>> CART = ENTITY_TYPES.register("wooden_cart",
             () -> EntityType.Builder.<CartEntity>of(CartEntity::new, MobCategory.MISC)
@@ -74,6 +81,14 @@ public final class PullCartMod {
             () -> IForgeMenuType.create((id, inventory, buffer) -> new LoomMenu(id, inventory)));
     public static final RegistryObject<Item> LOOM_ITEM = ITEMS.register("wooden_loom",
             () -> new LoomItem(LOOM.get(), new Item.Properties()));
+    public static final RegistryObject<RecipeType<SpinningRecipe>> SPINNING = RECIPE_TYPES.register("spinning",
+            () -> RecipeType.simple(ResourceLocation.fromNamespaceAndPath(MOD_ID, "spinning")));
+    public static final RegistryObject<RecipeSerializer<SpinningRecipe>> SPINNING_SERIALIZER =
+            RECIPE_SERIALIZERS.register("spinning", SpinningRecipe.Serializer::new);
+    public static final RegistryObject<RecipeType<SpindleRecipe>> SPINDLE = RECIPE_TYPES.register("spindle",
+            () -> RecipeType.simple(ResourceLocation.fromNamespaceAndPath(MOD_ID, "spindle")));
+    public static final RegistryObject<RecipeSerializer<SpindleRecipe>> SPINDLE_SERIALIZER =
+            RECIPE_SERIALIZERS.register("spindle", SpindleRecipe.Serializer::new);
 
     public PullCartMod(FMLJavaModLoadingContext context) {
         IEventBus modBus = context.getModEventBus();
@@ -82,6 +97,8 @@ public final class PullCartMod {
         BLOCK_ENTITY_TYPES.register(modBus);
         MENU_TYPES.register(modBus);
         ITEMS.register(modBus);
+        RECIPE_TYPES.register(modBus);
+        RECIPE_SERIALIZERS.register(modBus);
         modBus.addListener(PullCartMod::onCreativeTabs);
         context.registerConfig(ModConfig.Type.COMMON, PullCartConfig.SPEC);
         if (FMLEnvironment.dist == Dist.CLIENT) {
