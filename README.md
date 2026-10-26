@@ -28,8 +28,10 @@ GPL-2.0 too (see `LICENSE`). The model geometry and textures are MC+ Cart's.
 
 ## TerraFirmaCraft
 
-- The cart is a huge, heavy item (it doesn't fit in TFC containers), the wheel large and medium.
-- A chest on the cart holding more than 4 huge, very heavy items (anvils and the like) is too heavy to pull
+- The cart is a huge, very heavy item, like an anvil: no TFC chest, vessel or barrel takes it, and it can't be put
+  on the ground with V (only set down as a cart). Like an anvil, carrying one exhausts you and two overburden you.
+  The wheel is large and medium.
+- A chest on the cart holding more than 4 huge, very heavy items (anvils, carts and the like) is too heavy to pull
   (`tfc.maxHeavyItems` in `config/pull_cart-common.toml`).
 
 ## Config
