@@ -1,6 +1,8 @@
 {
   "item.pull_cart.wooden_cart": "Тележка",
   "item.pull_cart.wooden_wheel": "Деревянное колесо",
+  "block.pull_cart.wooden_loom": "Деревянный ткацкий станок",
+  "container.pull_cart.wooden_loom": "Деревянный ткацкий станок",
   "entity.pull_cart.wooden_cart": "Тележка",
   "message.pull_cart.hitched": "Вы тянете тележку. ПКМ по ней ещё раз — отпустить.",
   "message.pull_cart.let_go": "Вы отпустили тележку.",

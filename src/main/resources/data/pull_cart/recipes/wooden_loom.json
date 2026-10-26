@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PW ",
+    "PPP"
+  ],
+  "key": {
+    "P": {
+      "tag": "minecraft:planks"
+    },
+    "W": {
+      "item": "pull_cart:wooden_wheel"
+    }
+  },
+  "result": {
+    "item": "pull_cart:wooden_loom"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "pull_cart:spinning",
+  "ingredient": {
+    "tag": "minecraft:wool"
+  },
+  "result": {
+    "item": "minecraft:string",
+    "count": 4
+  },
+  "experience": 2.0,
+  "spinning_time": 400
+}

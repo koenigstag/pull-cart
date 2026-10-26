@@ -7,7 +7,7 @@ modId="${mod_id}" #mandatory
 version="${mod_version}" #mandatory
 displayName="${mod_name}" #mandatory
 authors="${mod_authors}" #optional
-credits="MC+ Cart and MC+ Wheel by andykuo1 (GPL-2.0): https://github.com/andykuo1/mcplus-mods"
+credits="MC+ Cart, MC+ Wheel and MC+ Loom by andykuo1 (GPL-2.0): https://github.com/andykuo1/mcplus-mods"
 description='''${mod_description}'''
 
 [[dependencies.${mod_id}]] #optional

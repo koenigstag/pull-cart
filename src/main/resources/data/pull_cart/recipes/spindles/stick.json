@@ -1,0 +1,7 @@
+{
+  "type": "pull_cart:spindle",
+  "ingredient": {
+    "tag": "forge:rods/wooden"
+  },
+  "duration": 200
+}

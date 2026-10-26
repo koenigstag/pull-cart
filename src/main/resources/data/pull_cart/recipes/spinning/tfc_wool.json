@@ -1,0 +1,18 @@
+{
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "tfc"
+    }
+  ],
+  "type": "pull_cart:spinning",
+  "ingredient": {
+    "item": "tfc:wool"
+  },
+  "result": {
+    "item": "tfc:wool_yarn",
+    "count": 8
+  },
+  "experience": 2.0,
+  "spinning_time": 400
+}
