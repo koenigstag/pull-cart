@@ -46,3 +46,10 @@ GPL-2.0 too (see `LICENSE`). The model geometry and textures are MC+ Cart's.
 ```
 
 JDK 17. The jar is in `build/libs/`; it is needed on both the server and the client.
+
+## License
+
+GPL-2.0, the license of the original (see `LICENSE`).
+
+- MC+ Cart and MC+ Wheel: Copyright (C) 2014-2015 andykuo1, https://github.com/andykuo1/mcplus-mods
+- Forge 1.20.1 port: Copyright (C) 2026 koenigstag
