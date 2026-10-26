@@ -1,6 +1,8 @@
 {
   "item.pull_cart.wooden_cart": "Wooden Cart",
   "item.pull_cart.wooden_wheel": "Wooden Wheel",
+  "block.pull_cart.wooden_loom": "Wooden Loom",
+  "container.pull_cart.wooden_loom": "Wooden Loom",
   "entity.pull_cart.wooden_cart": "Wooden Cart",
   "message.pull_cart.hitched": "You pull the cart. Right-click it again to let go.",
   "message.pull_cart.let_go": "You let go of the cart.",
