@@ -11,15 +11,15 @@ credits="MC+ Cart, MC+ Wheel and MC+ Loom by andykuo1 (GPL-2.0): https://github.
 description='''${mod_description}'''
 
 [[dependencies.${mod_id}]] #optional
-    modId="forge" #mandatory
-    mandatory=true #mandatory
-    versionRange="${forge_version_range}" #mandatory
+    modId="neoforge" #mandatory
+    type="required" #mandatory
+    versionRange="${neo_version_range}" #mandatory
     ordering="NONE"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="minecraft"
-    mandatory=true
+    type="required"
     versionRange="${minecraft_version_range}"
     ordering="NONE"
     side="BOTH"

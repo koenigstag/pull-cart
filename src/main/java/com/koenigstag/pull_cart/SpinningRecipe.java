@@ -1,56 +1,54 @@
 package com.koenigstag.pull_cart;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.GsonHelper;
-import net.minecraft.world.Container;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.util.ExtraCodecs;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
-import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 /**
  * {@code pull_cart:spinning}: what the loom spins, one item at a time.
  * <pre>
- * {"type": "pull_cart:spinning", "ingredient": {"tag": "minecraft:wool"}, "result": {"item": "minecraft:string", "count": 4},
+ * {"type": "pull_cart:spinning", "ingredient": {"tag": "minecraft:wool"}, "result": {"id": "minecraft:string", "count": 4},
  *  "experience": 2.0, "spinning_time": 400}
  * </pre>
  * Experience is for each item spun, and is given when you take the result out; spinning_time is in ticks (400 if left
  * out).
  */
-public record SpinningRecipe(ResourceLocation id, Ingredient ingredient, ItemStack result, float experience,
-                             int spinningTime) implements Recipe<Container> {
+public record SpinningRecipe(Ingredient ingredient, ItemStack result, float experience, int spinningTime)
+        implements Recipe<SingleRecipeInput> {
     public static final int DEFAULT_SPINNING_TIME = 400;
 
-    /** The first recipe that spins this item, or null. */
+    /** The recipe that spins this item, or null. */
     @Nullable
     public static SpinningRecipe find(Level level, ItemStack input) {
         if (input.isEmpty()) {
             return null;
         }
-        for (SpinningRecipe recipe : level.getRecipeManager().getAllRecipesFor(PullCartMod.SPINNING.get())) {
-            if (recipe.ingredient.test(input)) {
-                return recipe;
-            }
-        }
-        return null;
+        return level.getRecipeManager().getRecipeFor(PullCartMod.SPINNING.get(), new SingleRecipeInput(input), level)
+                .map(RecipeHolder::value).orElse(null);
     }
 
     @Override
-    public boolean matches(Container container, Level level) {
-        return ingredient.test(container.getItem(LoomBlockEntity.INPUT));
+    public boolean matches(SingleRecipeInput input, Level level) {
+        return ingredient.test(input.item());
     }
 
     @Override
-    public ItemStack assemble(Container container, RegistryAccess registries) {
+    public ItemStack assemble(SingleRecipeInput input, HolderLookup.Provider registries) {
         return result.copy();
     }
 
@@ -60,7 +58,7 @@ public record SpinningRecipe(ResourceLocation id, Ingredient ingredient, ItemSta
     }
 
     @Override
-    public ItemStack getResultItem(RegistryAccess registries) {
+    public ItemStack getResultItem(HolderLookup.Provider registries) {
         return result;
     }
 
@@ -76,11 +74,6 @@ public record SpinningRecipe(ResourceLocation id, Ingredient ingredient, ItemSta
     }
 
     @Override
-    public ResourceLocation getId() {
-        return id;
-    }
-
-    @Override
     public RecipeSerializer<?> getSerializer() {
         return PullCartMod.SPINNING_SERIALIZER.get();
     }
@@ -91,30 +84,27 @@ public record SpinningRecipe(ResourceLocation id, Ingredient ingredient, ItemSta
     }
 
     public static final class Serializer implements RecipeSerializer<SpinningRecipe> {
+        private static final MapCodec<SpinningRecipe> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                Ingredient.CODEC_NONEMPTY.fieldOf("ingredient").forGetter(SpinningRecipe::ingredient),
+                ItemStack.STRICT_CODEC.fieldOf("result").forGetter(SpinningRecipe::result),
+                Codec.FLOAT.optionalFieldOf("experience", 0f).forGetter(SpinningRecipe::experience),
+                ExtraCodecs.POSITIVE_INT.optionalFieldOf("spinning_time", DEFAULT_SPINNING_TIME).forGetter(SpinningRecipe::spinningTime)
+        ).apply(instance, SpinningRecipe::new));
+        private static final StreamCodec<RegistryFriendlyByteBuf, SpinningRecipe> STREAM_CODEC = StreamCodec.composite(
+                Ingredient.CONTENTS_STREAM_CODEC, SpinningRecipe::ingredient,
+                ItemStack.STREAM_CODEC, SpinningRecipe::result,
+                ByteBufCodecs.FLOAT, SpinningRecipe::experience,
+                ByteBufCodecs.VAR_INT, SpinningRecipe::spinningTime,
+                SpinningRecipe::new);
+
         @Override
-        public SpinningRecipe fromJson(ResourceLocation id, JsonObject json) {
-            Ingredient ingredient = Ingredient.fromJson(GsonHelper.getNonNull(json, "ingredient"));
-            ItemStack result = ShapedRecipe.itemStackFromJson(GsonHelper.getAsJsonObject(json, "result"));
-            float experience = GsonHelper.getAsFloat(json, "experience", 0);
-            int time = GsonHelper.getAsInt(json, "spinning_time", DEFAULT_SPINNING_TIME);
-            if (time <= 0) {
-                throw new JsonSyntaxException("spinning_time must be positive, was " + time);
-            }
-            return new SpinningRecipe(id, ingredient, result, experience, time);
+        public MapCodec<SpinningRecipe> codec() {
+            return CODEC;
         }
 
         @Override
-        public SpinningRecipe fromNetwork(ResourceLocation id, FriendlyByteBuf buffer) {
-            return new SpinningRecipe(id, Ingredient.fromNetwork(buffer), buffer.readItem(), buffer.readFloat(),
-                    buffer.readVarInt());
-        }
-
-        @Override
-        public void toNetwork(FriendlyByteBuf buffer, SpinningRecipe recipe) {
-            recipe.ingredient.toNetwork(buffer);
-            buffer.writeItem(recipe.result);
-            buffer.writeFloat(recipe.experience);
-            buffer.writeVarInt(recipe.spinningTime);
+        public StreamCodec<RegistryFriendlyByteBuf, SpinningRecipe> streamCodec() {
+            return STREAM_CODEC;
         }
     }
 }

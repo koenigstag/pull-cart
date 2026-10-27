@@ -53,7 +53,7 @@ public class CartModel extends EntityModel<CartEntity> {
     }
 
     @Override
-    public void renderToBuffer(PoseStack pose, VertexConsumer buffer, int light, int overlay, float red, float green, float blue, float alpha) {
-        root.render(pose, buffer, light, overlay, red, green, blue, alpha);
+    public void renderToBuffer(PoseStack pose, VertexConsumer buffer, int light, int overlay, int color) {
+        root.render(pose, buffer, light, overlay, color);
     }
 }

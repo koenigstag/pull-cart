@@ -50,7 +50,7 @@ public class CartRenderer extends EntityRenderer<CartEntity> {
         pose.translate(0, BODY_HEIGHT, 0);
         pose.mulPose(Axis.YP.rotationDegrees(facing));
         pose.scale(-1, -1, 1);
-        model.renderToBuffer(pose, buffers.getBuffer(model.renderType(TEXTURE)), light, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.renderToBuffer(pose, buffers.getBuffer(model.renderType(TEXTURE)), light, OverlayTexture.NO_OVERLAY);
         pose.popPose();
 
         if (wheel.isEmpty()) {

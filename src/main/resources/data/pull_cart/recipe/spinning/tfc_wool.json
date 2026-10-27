@@ -1,7 +1,7 @@
 {
-  "conditions": [
+  "neoforge:conditions": [
     {
-      "type": "forge:mod_loaded",
+      "type": "neoforge:mod_loaded",
       "modid": "tfc"
     }
   ],
@@ -10,7 +10,7 @@
     "item": "tfc:wool"
   },
   "result": {
-    "item": "tfc:wool_yarn",
+    "id": "tfc:wool_yarn",
     "count": 8
   },
   "experience": 2.0,

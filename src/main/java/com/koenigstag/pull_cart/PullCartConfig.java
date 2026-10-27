@@ -1,17 +1,17 @@
 package com.koenigstag.pull_cart;
 
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** config/pull_cart-common.toml */
 public final class PullCartConfig {
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec SPEC;
 
-    public static final ForgeConfigSpec.DoubleValue FOLLOW_GAP;
-    public static final ForgeConfigSpec.DoubleValue LET_GO_DISTANCE;
-    public static final ForgeConfigSpec.IntValue MAX_HEAVY_ITEMS;
+    public static final ModConfigSpec.DoubleValue FOLLOW_GAP;
+    public static final ModConfigSpec.DoubleValue LET_GO_DISTANCE;
+    public static final ModConfigSpec.IntValue MAX_HEAVY_ITEMS;
 
     static {
-        ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder b = new ModConfigSpec.Builder();
         b.push("pulling");
         FOLLOW_GAP = b.comment("Blocks between you and the cart while you pull it.")
                 .defineInRange("followGap", 1.2, 0.5, 4.0);

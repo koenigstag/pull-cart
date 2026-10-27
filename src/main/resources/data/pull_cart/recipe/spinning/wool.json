@@ -4,7 +4,7 @@
     "tag": "minecraft:wool"
   },
   "result": {
-    "item": "minecraft:string",
+    "id": "minecraft:string",
     "count": 4
   },
   "experience": 2.0,

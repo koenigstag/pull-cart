@@ -2,21 +2,20 @@ package com.koenigstag.pull_cart;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
@@ -24,11 +23,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.items.IItemHandlerModifiable;
-import net.minecraftforge.items.wrapper.SidedInvWrapper;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -49,7 +43,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     private static final int[] SLOTS_DOWN = {RESULT};
     private static final int[] SLOTS_SIDES = {SPINDLE_B, SPINDLE_A};
 
-    private final NonNullList<ItemStack> items = NonNullList.withSize(4, ItemStack.EMPTY);
+    private NonNullList<ItemStack> items = NonNullList.withSize(4, ItemStack.EMPTY);
     private int burnTime;
     private int burnDuration;
     private int spinTime;
@@ -58,8 +52,6 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     private float experience;
     private float wheelAngle;
     private float wheelAngleO;
-    private LazyOptional<? extends IItemHandlerModifiable>[] handlers =
-            SidedInvWrapper.create(this, Direction.UP, Direction.DOWN, Direction.NORTH);
 
     final ContainerData data = new ContainerData() {
         @Override
@@ -107,8 +99,8 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
             SpindleRecipe b = SpindleRecipe.find(level, loom.items.get(SPINDLE_B));
             if (a != null && b != null) {
                 loom.burnTime = loom.burnDuration = a.duration() + b.duration();
-                loom.useSpindle(SPINDLE_A, a, level.random);
-                loom.useSpindle(SPINDLE_B, b, level.random);
+                loom.useSpindle(SPINDLE_A, a, (ServerLevel) level);
+                loom.useSpindle(SPINDLE_B, b, (ServerLevel) level);
                 changed = true;
             }
         }
@@ -158,7 +150,7 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
 
     private boolean fits(ItemStack result) {
         ItemStack out = items.get(RESULT);
-        return out.isEmpty() || ItemStack.isSameItemSameTags(out, result)
+        return out.isEmpty() || ItemStack.isSameItemSameComponents(out, result)
                 && out.getCount() + result.getCount() <= out.getMaxStackSize();
     }
 
@@ -173,12 +165,11 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
         experience += recipe.experience();
     }
 
-    private void useSpindle(int slot, SpindleRecipe spindle, RandomSource random) {
+    private void useSpindle(int slot, SpindleRecipe spindle, ServerLevel level) {
         ItemStack stack = items.get(slot);
         if (spindle.damage() > 0 && stack.isDamageableItem()) {
-            if (stack.hurt(spindle.damage(), random, null)) {
-                stack.shrink(1);
-            }
+            stack.hurtAndBreak(spindle.damage(), level, (ServerPlayer) null, item -> {
+            });
             return;
         }
         ItemStack remainder = stack.getCraftingRemainingItem();
@@ -200,10 +191,10 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
-        items.clear();
-        ContainerHelper.loadAllItems(tag, items);
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+        items = NonNullList.withSize(getContainerSize(), ItemStack.EMPTY);
+        ContainerHelper.loadAllItems(tag, items, registries);
         burnTime = tag.getInt("BurnTime");
         burnDuration = tag.getInt("BurnDuration");
         spinTime = tag.getInt("SpinTime");
@@ -212,9 +203,9 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
-        ContainerHelper.saveAllItems(tag, items);
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        ContainerHelper.saveAllItems(tag, items, registries);
         tag.putInt("BurnTime", burnTime);
         tag.putInt("BurnDuration", burnDuration);
         tag.putInt("SpinTime", spinTime);
@@ -240,32 +231,19 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     }
 
     @Override
-    public boolean isEmpty() {
-        return items.stream().allMatch(ItemStack::isEmpty);
+    protected NonNullList<ItemStack> getItems() {
+        return items;
     }
 
     @Override
-    public ItemStack getItem(int slot) {
-        return items.get(slot);
-    }
-
-    @Override
-    public ItemStack removeItem(int slot, int amount) {
-        return ContainerHelper.removeItem(items, slot, amount);
-    }
-
-    @Override
-    public ItemStack removeItemNoUpdate(int slot) {
-        return ContainerHelper.takeItem(items, slot);
+    protected void setItems(NonNullList<ItemStack> items) {
+        this.items = items;
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        boolean sameInput = slot == INPUT && ItemStack.isSameItemSameTags(stack, items.get(INPUT));
-        items.set(slot, stack);
-        if (stack.getCount() > getMaxStackSize()) {
-            stack.setCount(getMaxStackSize());
-        }
+        boolean sameInput = slot == INPUT && ItemStack.isSameItemSameComponents(stack, items.get(INPUT));
+        super.setItem(slot, stack);
         if (slot == INPUT && !sameInput) {
             spinTime = 0; // something else starts spinning from scratch, as in a furnace
         }
@@ -278,16 +256,6 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
             case SPINDLE_A, SPINDLE_B -> level != null && SpindleRecipe.find(level, stack) != null;
             default -> true;
         };
-    }
-
-    @Override
-    public boolean stillValid(Player player) {
-        return Container.stillValidBlockEntity(this, player);
-    }
-
-    @Override
-    public void clearContent() {
-        items.clear();
     }
 
     // Hoppers: what to spin in from the top, spindles from the sides, the result out of the bottom.
@@ -305,31 +273,5 @@ public class LoomBlockEntity extends BaseContainerBlockEntity implements Worldly
     @Override
     public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction side) {
         return true;
-    }
-
-    @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {
-        if (!remove && side != null && cap == ForgeCapabilities.ITEM_HANDLER) {
-            return switch (side) {
-                case UP -> handlers[0].cast();
-                case DOWN -> handlers[1].cast();
-                default -> handlers[2].cast();
-            };
-        }
-        return super.getCapability(cap, side);
-    }
-
-    @Override
-    public void invalidateCaps() {
-        super.invalidateCaps();
-        for (LazyOptional<? extends IItemHandlerModifiable> handler : handlers) {
-            handler.invalidate();
-        }
-    }
-
-    @Override
-    public void reviveCaps() {
-        super.reviveCaps();
-        handlers = SidedInvWrapper.create(this, Direction.UP, Direction.DOWN, Direction.NORTH);
     }
 }

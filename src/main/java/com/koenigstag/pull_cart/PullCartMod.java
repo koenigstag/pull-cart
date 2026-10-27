@@ -2,10 +2,12 @@ package com.koenigstag.pull_cart;
 
 import com.koenigstag.pull_cart.client.PullCartClient;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -16,24 +18,27 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.material.MapColor;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.common.extensions.IForgeMenuType;
-import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.fml.loading.FMLEnvironment;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.items.wrapper.InvWrapper;
+import net.neoforged.neoforge.items.wrapper.SidedInvWrapper;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
 
 /**
- * A wooden cart you pull by hand, and a wooden loom that spins wool into string. A Minecraft 1.20.1 port of MC+ Cart,
- * MC+ Wheel and MC+ Loom by andykuo1 (GPL-2.0, github.com/andykuo1/mcplus-mods), the cart TFC.SU played with on
- * 1.7.10.
+ * A wooden cart you pull by hand, and a wooden loom that spins wool into string. A Minecraft 1.21.1 (NeoForge) port of
+ * MC+ Cart, MC+ Wheel and MC+ Loom by andykuo1 (GPL-2.0, github.com/andykuo1/mcplus-mods), the cart TFC.SU played
+ * with on 1.7.10.
  */
 @Mod(PullCartMod.MOD_ID)
 public final class PullCartMod {
@@ -41,32 +46,29 @@ public final class PullCartMod {
     public static final Logger LOGGER = LogUtils.getLogger();
     public static final boolean TFC = ModList.get().isLoaded("tfc");
 
-    private static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
-            DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MOD_ID);
-    private static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, MOD_ID);
+    private static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
+    private static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(Registries.BLOCK, MOD_ID);
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES =
-            DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MOD_ID);
-    private static final DeferredRegister<MenuType<?>> MENU_TYPES =
-            DeferredRegister.create(ForgeRegistries.MENU_TYPES, MOD_ID);
-    private static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MOD_ID);
-    private static final DeferredRegister<RecipeType<?>> RECIPE_TYPES =
-            DeferredRegister.create(ForgeRegistries.RECIPE_TYPES, MOD_ID);
+            DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
+    private static final DeferredRegister<MenuType<?>> MENU_TYPES = DeferredRegister.create(Registries.MENU, MOD_ID);
+    private static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, MOD_ID);
+    private static final DeferredRegister<RecipeType<?>> RECIPE_TYPES = DeferredRegister.create(Registries.RECIPE_TYPE, MOD_ID);
     private static final DeferredRegister<RecipeSerializer<?>> RECIPE_SERIALIZERS =
-            DeferredRegister.create(ForgeRegistries.RECIPE_SERIALIZERS, MOD_ID);
+            DeferredRegister.create(Registries.RECIPE_SERIALIZER, MOD_ID);
 
-    public static final RegistryObject<EntityType<CartEntity>> CART = ENTITY_TYPES.register("wooden_cart",
+    public static final DeferredHolder<EntityType<?>, EntityType<CartEntity>> CART = ENTITY_TYPES.register("wooden_cart",
             () -> EntityType.Builder.<CartEntity>of(CartEntity::new, MobCategory.MISC)
                     // Narrower than the model, so it follows you through one-block passages.
                     .sized(0.98f, 0.8f)
                     .clientTrackingRange(10)
                     .updateInterval(2)
                     .build(MOD_ID + ":wooden_cart"));
-    public static final RegistryObject<Item> CART_ITEM = ITEMS.register("wooden_cart",
+    public static final DeferredHolder<Item, Item> CART_ITEM = ITEMS.register("wooden_cart",
             () -> new CartItem(new Item.Properties().stacksTo(1)));
-    public static final RegistryObject<Item> WHEEL = ITEMS.register("wooden_wheel",
+    public static final DeferredHolder<Item, Item> WHEEL = ITEMS.register("wooden_wheel",
             () -> new Item(new Item.Properties()));
 
-    public static final RegistryObject<Block> LOOM = BLOCKS.register("wooden_loom",
+    public static final DeferredHolder<Block, Block> LOOM = BLOCKS.register("wooden_loom",
             () -> new LoomBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.WOOD)
                     .instrument(NoteBlockInstrument.BASS)
@@ -74,24 +76,23 @@ public final class PullCartMod {
                     .sound(SoundType.WOOD)
                     .noOcclusion()
                     .ignitedByLava()));
-    public static final RegistryObject<BlockEntityType<LoomBlockEntity>> LOOM_BLOCK_ENTITY =
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LoomBlockEntity>> LOOM_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("wooden_loom",
                     () -> BlockEntityType.Builder.of(LoomBlockEntity::new, LOOM.get()).build(null));
-    public static final RegistryObject<MenuType<LoomMenu>> LOOM_MENU = MENU_TYPES.register("wooden_loom",
-            () -> IForgeMenuType.create((id, inventory, buffer) -> new LoomMenu(id, inventory)));
-    public static final RegistryObject<Item> LOOM_ITEM = ITEMS.register("wooden_loom",
-            () -> new LoomItem(LOOM.get(), new Item.Properties()));
-    public static final RegistryObject<RecipeType<SpinningRecipe>> SPINNING = RECIPE_TYPES.register("spinning",
+    public static final DeferredHolder<MenuType<?>, MenuType<LoomMenu>> LOOM_MENU = MENU_TYPES.register("wooden_loom",
+            () -> IMenuTypeExtension.create((id, inventory, buffer) -> new LoomMenu(id, inventory)));
+    public static final DeferredHolder<Item, Item> LOOM_ITEM = ITEMS.register("wooden_loom",
+            () -> new BlockItem(LOOM.get(), new Item.Properties()));
+    public static final DeferredHolder<RecipeType<?>, RecipeType<SpinningRecipe>> SPINNING = RECIPE_TYPES.register("spinning",
             () -> RecipeType.simple(ResourceLocation.fromNamespaceAndPath(MOD_ID, "spinning")));
-    public static final RegistryObject<RecipeSerializer<SpinningRecipe>> SPINNING_SERIALIZER =
+    public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<SpinningRecipe>> SPINNING_SERIALIZER =
             RECIPE_SERIALIZERS.register("spinning", SpinningRecipe.Serializer::new);
-    public static final RegistryObject<RecipeType<SpindleRecipe>> SPINDLE = RECIPE_TYPES.register("spindle",
+    public static final DeferredHolder<RecipeType<?>, RecipeType<SpindleRecipe>> SPINDLE = RECIPE_TYPES.register("spindle",
             () -> RecipeType.simple(ResourceLocation.fromNamespaceAndPath(MOD_ID, "spindle")));
-    public static final RegistryObject<RecipeSerializer<SpindleRecipe>> SPINDLE_SERIALIZER =
+    public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<SpindleRecipe>> SPINDLE_SERIALIZER =
             RECIPE_SERIALIZERS.register("spindle", SpindleRecipe.Serializer::new);
 
-    public PullCartMod(FMLJavaModLoadingContext context) {
-        IEventBus modBus = context.getModEventBus();
+    public PullCartMod(IEventBus modBus, ModContainer container) {
         ENTITY_TYPES.register(modBus);
         BLOCKS.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);
@@ -100,7 +101,8 @@ public final class PullCartMod {
         RECIPE_TYPES.register(modBus);
         RECIPE_SERIALIZERS.register(modBus);
         modBus.addListener(PullCartMod::onCreativeTabs);
-        context.registerConfig(ModConfig.Type.COMMON, PullCartConfig.SPEC);
+        modBus.addListener(PullCartMod::onRegisterCapabilities);
+        container.registerConfig(ModConfig.Type.COMMON, PullCartConfig.SPEC);
         if (FMLEnvironment.dist == Dist.CLIENT) {
             PullCartClient.init(modBus);
         }
@@ -108,11 +110,17 @@ public final class PullCartMod {
 
     private static void onCreativeTabs(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
-            event.accept(CART_ITEM);
+            event.accept(CART_ITEM.get());
         } else if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
-            event.accept(WHEEL);
+            event.accept(WHEEL.get());
         } else if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
-            event.accept(LOOM_ITEM);
+            event.accept(LOOM_ITEM.get());
         }
+    }
+
+    /** Hoppers and pipes: the loom's sides, as a furnace's. */
+    private static void onRegisterCapabilities(RegisterCapabilitiesEvent event) {
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, LOOM_BLOCK_ENTITY.get(),
+                (loom, side) -> side == null ? new InvWrapper(loom) : new SidedInvWrapper(loom, side));
     }
 }

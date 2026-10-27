@@ -1,7 +1,7 @@
 {
   "type": "pull_cart:spindle",
   "ingredient": {
-    "tag": "forge:rods/wooden"
+    "tag": "c:tools/shear"
   },
-  "duration": 200
+  "duration": 3200
 }

@@ -1,5 +1,6 @@
 package com.koenigstag.pull_cart;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Mth;
@@ -9,10 +10,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.item.crafting.SmeltingRecipe;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.common.ForgeHooks;
 
 import java.util.Optional;
 
@@ -75,13 +77,14 @@ final class CartFurnace implements Container {
             litTime--;
         }
         ItemStack input = items.get(INPUT);
-        Optional<SmeltingRecipe> recipe = input.isEmpty() ? Optional.empty()
-                : level.getRecipeManager().getRecipeFor(RecipeType.SMELTING, this, level);
-        ItemStack result = recipe.map(r -> r.assemble(this, level.registryAccess())).orElse(ItemStack.EMPTY);
+        SingleRecipeInput recipeInput = new SingleRecipeInput(input);
+        Optional<RecipeHolder<SmeltingRecipe>> recipe = input.isEmpty() ? Optional.empty()
+                : level.getRecipeManager().getRecipeFor(RecipeType.SMELTING, recipeInput, level);
+        ItemStack result = recipe.map(r -> r.value().assemble(recipeInput, level.registryAccess())).orElse(ItemStack.EMPTY);
         boolean canSmelt = !result.isEmpty() && fits(result);
         if (!lit() && canSmelt) {
             ItemStack fuel = items.get(FUEL);
-            litTime = litDuration = ForgeHooks.getBurnTime(fuel, RecipeType.SMELTING);
+            litTime = litDuration = fuel.getBurnTime(RecipeType.SMELTING);
             if (lit()) {
                 if (fuel.hasCraftingRemainingItem() && fuel.getCount() == 1) {
                     items.set(FUEL, fuel.getCraftingRemainingItem());
@@ -91,7 +94,7 @@ final class CartFurnace implements Container {
             }
         }
         if (lit() && canSmelt) {
-            cookingTotalTime = recipe.get().getCookingTime();
+            cookingTotalTime = recipe.get().value().getCookingTime();
             if (++cookingProgress >= cookingTotalTime) {
                 cookingProgress = 0;
                 ItemStack out = items.get(RESULT);
@@ -112,21 +115,21 @@ final class CartFurnace implements Container {
 
     private boolean fits(ItemStack result) {
         ItemStack out = items.get(RESULT);
-        return out.isEmpty() || ItemStack.isSameItemSameTags(out, result)
+        return out.isEmpty() || ItemStack.isSameItemSameComponents(out, result)
                 && out.getCount() + result.getCount() <= out.getMaxStackSize();
     }
 
-    void save(CompoundTag tag) {
-        ContainerHelper.saveAllItems(tag, items);
+    void save(CompoundTag tag, HolderLookup.Provider registries) {
+        ContainerHelper.saveAllItems(tag, items, registries);
         tag.putInt("BurnTime", litTime);
         tag.putInt("BurnDuration", litDuration);
         tag.putInt("CookTime", cookingProgress);
         tag.putInt("CookTimeTotal", cookingTotalTime);
     }
 
-    void load(CompoundTag tag) {
+    void load(CompoundTag tag, HolderLookup.Provider registries) {
         items.clear();
-        ContainerHelper.loadAllItems(tag, items);
+        ContainerHelper.loadAllItems(tag, items, registries);
         litTime = tag.getInt("BurnTime");
         litDuration = tag.getInt("BurnDuration");
         cookingProgress = tag.getInt("CookTime");
@@ -173,7 +176,7 @@ final class CartFurnace implements Container {
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        boolean sameInput = slot == INPUT && ItemStack.isSameItemSameTags(stack, items.get(INPUT));
+        boolean sameInput = slot == INPUT && ItemStack.isSameItemSameComponents(stack, items.get(INPUT));
         items.set(slot, stack);
         if (slot == INPUT && !sameInput) {
             cookingProgress = 0; // a new item starts cooking from scratch, as in a furnace
@@ -186,7 +189,7 @@ final class CartFurnace implements Container {
             return false;
         }
         if (slot == FUEL) {
-            return ForgeHooks.getBurnTime(stack, RecipeType.SMELTING) > 0
+            return stack.getBurnTime(RecipeType.SMELTING) > 0
                     || stack.is(Items.BUCKET) && !items.get(FUEL).is(Items.BUCKET);
         }
         return true;

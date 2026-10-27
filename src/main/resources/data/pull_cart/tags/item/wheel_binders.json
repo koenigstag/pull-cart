@@ -1,7 +1,7 @@
 {
   "replace": false,
   "values": [
-    "#forge:slimeballs",
+    "#c:slime_balls",
     {
       "id": "tfc:glue",
       "required": false

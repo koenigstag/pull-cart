@@ -2,6 +2,8 @@ package com.koenigstag.pull_cart;
 
 import com.koenigstag.pull_cart.compat.TfcWeight;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,6 +22,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MoverType;
@@ -28,18 +31,19 @@ import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.FurnaceMenu;
 import net.minecraft.world.inventory.PlayerEnderChestContainer;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.RecordItem;
+import net.minecraft.world.item.JukeboxSong;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.LevelEvent;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
+import java.util.Optional;
 
 /**
- * The wooden cart of MC+ Cart (andykuo1, GPL-2.0), on Minecraft 1.20.1.
+ * The wooden cart of MC+ Cart (andykuo1, GPL-2.0), on Minecraft 1.21.1.
  * <ul>
  * <li>Right-click it to pull it behind you, again to let go; riding a horse, the horse pulls it.</li>
  * <li>Right-click it with a chest, crafting table, ender chest, furnace or jukebox to load that block, and
@@ -90,15 +94,20 @@ public class CartEntity extends Entity {
 
     public CartEntity(EntityType<? extends CartEntity> type, Level level) {
         super(type, level);
-        setMaxUpStep(1.0f);
         blocksBuilding = true;
     }
 
     @Override
-    protected void defineSynchedData() {
-        entityData.define(CARGO, ItemStack.EMPTY);
-        entityData.define(LIT, false);
-        entityData.define(PLAYING, false);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(CARGO, ItemStack.EMPTY);
+        builder.define(LIT, false);
+        builder.define(PLAYING, false);
+    }
+
+    /** It climbs one-block steps behind you. */
+    @Override
+    public float maxUpStep() {
+        return 1.0f;
     }
 
     /** The block it carries, empty for none. */
@@ -339,16 +348,20 @@ public class CartEntity extends Entity {
             case JUKEBOX -> {
                 if (!record.isEmpty()) {
                     ejectRecord();
-                } else if (held.getItem() instanceof RecordItem disc) {
-                    record = held.copyWithCount(1);
-                    if (!player.getAbilities().instabuild) {
-                        held.shrink(1);
+                } else {
+                    Optional<Holder<JukeboxSong>> song = JukeboxSong.fromStack(registryAccess(), held);
+                    if (song.isPresent()) {
+                        record = held.copyWithCount(1);
+                        if (!player.getAbilities().instabuild) {
+                            held.shrink(1);
+                        }
+                        songPos = blockPosition();
+                        songTicks = song.get().value().lengthInTicks();
+                        entityData.set(PLAYING, true);
+                        level().levelEvent(null, LevelEvent.SOUND_PLAY_JUKEBOX_SONG, songPos,
+                                registryAccess().registryOrThrow(Registries.JUKEBOX_SONG).getId(song.get().value()));
+                        letGo("message.pull_cart.playing");
                     }
-                    songPos = blockPosition();
-                    songTicks = disc.getLengthInTicks();
-                    entityData.set(PLAYING, true);
-                    level().levelEvent(null, LevelEvent.SOUND_PLAY_JUKEBOX_SONG, songPos, Item.getId(disc));
-                    letGo("message.pull_cart.playing");
                 }
             }
             default -> {
@@ -443,12 +456,12 @@ public class CartEntity extends Entity {
     }
 
     @Override
-    public double getPassengersRidingOffset() {
-        return 0.45;
+    protected Vec3 getPassengerAttachmentPoint(Entity passenger, EntityDimensions dimensions, float scale) {
+        return new Vec3(0, 0.45, 0);
     }
 
     @Override
-    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps, boolean teleport) {
+    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps) {
         lerpX = x;
         lerpY = y;
         lerpZ = z;
@@ -473,39 +486,39 @@ public class CartEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
-        setCargo(ItemStack.of(tag.getCompound("Cargo")));
+        setCargo(ItemStack.parseOptional(registryAccess(), tag.getCompound("Cargo")));
         chest.clearContent();
         ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);
         for (int i = 0; i < items.size(); i++) {
             CompoundTag item = items.getCompound(i);
             int slot = item.getByte("Slot") & 255;
             if (slot < chest.getContainerSize()) {
-                chest.setItem(slot, ItemStack.of(item));
+                chest.setItem(slot, ItemStack.parseOptional(registryAccess(), item));
             }
         }
-        furnace.load(tag.getCompound("Furnace"));
-        record = ItemStack.of(tag.getCompound("Record"));
+        furnace.load(tag.getCompound("Furnace"), registryAccess());
+        record = ItemStack.parseOptional(registryAccess(), tag.getCompound("Record"));
         setLit(furnace.lit());
     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
-        tag.put("Cargo", cargoItem().save(new CompoundTag()));
+        tag.put("Cargo", cargoItem().saveOptional(registryAccess()));
         ListTag items = new ListTag();
         for (int slot = 0; slot < chest.getContainerSize(); slot++) {
             ItemStack stack = chest.getItem(slot);
             if (!stack.isEmpty()) {
-                CompoundTag item = stack.save(new CompoundTag());
+                CompoundTag item = new CompoundTag();
                 item.putByte("Slot", (byte) slot);
-                items.add(item);
+                items.add(stack.save(registryAccess(), item));
             }
         }
         tag.put("Items", items);
         CompoundTag furnaceTag = new CompoundTag();
-        furnace.save(furnaceTag);
+        furnace.save(furnaceTag, registryAccess());
         tag.put("Furnace", furnaceTag);
         if (!record.isEmpty()) {
-            tag.put("Record", record.save(new CompoundTag()));
+            tag.put("Record", record.save(registryAccess()));
         }
     }
 }

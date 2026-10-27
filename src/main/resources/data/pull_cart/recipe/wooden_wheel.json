@@ -8,13 +8,13 @@
   ],
   "key": {
     "S": {
-      "tag": "forge:rods/wooden"
+      "tag": "c:rods/wooden"
     },
     "B": {
       "tag": "pull_cart:wheel_binders"
     }
   },
   "result": {
-    "item": "pull_cart:wooden_wheel"
+    "id": "pull_cart:wooden_wheel"
   }
 }

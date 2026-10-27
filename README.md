@@ -1,7 +1,7 @@
-# Pull Cart (Forge 1.20.1)
+# Pull Cart (NeoForge 1.21.1)
 
 A wooden cart you pull by hand: the cart TFC.SU played with on 1.7.10, which was **MC+ Cart** by andykuo1. This is a
-Minecraft 1.20.1 Forge port of [MC+ Cart, MC+ Wheel and MC+ Loom](https://github.com/andykuo1/mcplus-mods) (GPL-2.0),
+Minecraft 1.21.1 NeoForge port of [MC+ Cart, MC+ Wheel and MC+ Loom](https://github.com/andykuo1/mcplus-mods) (GPL-2.0),
 so it is GPL-2.0 too (see `LICENSE`). The model geometry and textures are MC+ Cart's and MC+ Loom's.
 
 ## How it works
@@ -37,7 +37,7 @@ MC+ Loom's loom: it spins wool into string, like a furnace with two fuel slots.
 ### Loom recipes (datapacks)
 
 What the loom spins and what it takes as spindles are recipes, so a datapack (or KubeJS, CraftTweaker) can add,
-change or remove them. They live in `data/<namespace>/recipes/`.
+change or remove them. They live in `data/<namespace>/recipe/`.
 
 `pull_cart:spinning`: one item on top becomes `result`. `experience` is earned for each item spun and
 `spinning_time` is in ticks (400, 20 seconds, if left out).
@@ -46,7 +46,7 @@ change or remove them. They live in `data/<namespace>/recipes/`.
 {
   "type": "pull_cart:spinning",
   "ingredient": {"item": "tfc:wool"},
-  "result": {"item": "tfc:wool_yarn", "count": 8},
+  "result": {"id": "tfc:wool_yarn", "count": 8},
   "experience": 2.0,
   "spinning_time": 400
 }
@@ -67,7 +67,7 @@ it runs out.
 
 The mod's own recipes are `pull_cart:spinning/wool`, `pull_cart:spindles/stick`, `pull_cart:spindles/blaze_rod` and
 `pull_cart:spindles/shears`. To change or remove one, put a file at the same path in a datapack. Make it an empty
-recipe (`{"conditions": [{"type": "forge:false"}]}`) to remove it. When two recipes match the same item, either one may
+recipe (`{"neoforge:conditions": [{"type": "neoforge:false"}]}`) to remove it. When two recipes match the same item, either one may
 be used, so change the mod's recipe rather than adding a second one for the same item.
 
 ## Crafting
@@ -78,8 +78,9 @@ be used, so change the mod's recipe rather than adding a second one for the same
 
 ## TerraFirmaCraft
 
-- The cart is a huge, very heavy item, like an anvil: no TFC chest, vessel or barrel takes it, and it can't be put
-  on the ground with V (only set down as a cart). Like an anvil, carrying one exhausts you and two overburden you.
+- The cart is a huge, very heavy item, like an anvil: no TFC chest, vessel, barrel or bundle takes it. Like an anvil,
+  carrying one exhausts you and two overburden you. TFC on 1.21.1 has no way to keep an item from being put on the
+  ground with V, so the cart can be (as a still item; it only becomes a cart when you set it down with right-click).
   The wheel is large and medium. The loom is large and very heavy, like TFC's own loom.
 - The loom spins TFC wool into 8 wool yarn (as a spindle does by hand) and takes TFC spindles: one turns it for 20
   seconds and loses 1 durability each time, so two spindles spin 2 wool per use and 80 wool before they break. It
@@ -99,11 +100,11 @@ be used, so change the mod's recipe rather than adding a second one for the same
 ./gradlew build
 ```
 
-JDK 17. The jar is in `build/libs/`; it is needed on both the server and the client.
+JDK 21. The jar is in `build/libs/`; it is needed on both the server and the client.
 
 ## License
 
 GPL-2.0, the license of the original (see `LICENSE`).
 
 - MC+ Cart, MC+ Wheel and MC+ Loom: Copyright (C) 2014-2015 andykuo1, https://github.com/andykuo1/mcplus-mods
-- Forge 1.20.1 port: Copyright (C) 2026 koenigstag
+- Forge 1.20.1 and NeoForge 1.21.1 ports: Copyright (C) 2026 koenigstag
