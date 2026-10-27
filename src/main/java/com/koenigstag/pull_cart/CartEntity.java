@@ -12,7 +12,6 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -35,6 +34,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.LevelEvent;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.gameevent.GameEvent;
 
 import javax.annotation.Nullable;
 
@@ -45,7 +45,8 @@ import javax.annotation.Nullable;
  * <li>Right-click it with a chest, crafting table, ender chest, furnace or jukebox to load that block, and
  * Shift + right-click to use it (a jukebox takes the disc in your hand, or gives it back).</li>
  * <li>Right-click it while you lead a small animal on a lead to put the animal in; Shift + right-click lets it out.</li>
- * <li>Hit it to break it (it drops itself and what it carries); Shift + hit takes the block off.</li>
+ * <li>Hit it a few times to break it, as a minecart or boat (it drops itself and what it carries); Shift + hit
+ * takes the block off.</li>
  * <li>Under water it breaks. While a disc plays, it stays where it is.</li>
  * </ul>
  * With TerraFirmaCraft, a chest holding too many huge, very heavy items can't be pulled.
@@ -57,7 +58,15 @@ public class CartEntity extends Entity {
             SynchedEntityData.defineId(CartEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> PLAYING =
             SynchedEntityData.defineId(CartEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Integer> HURT_TIME =
+            SynchedEntityData.defineId(CartEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> HURT_DIR =
+            SynchedEntityData.defineId(CartEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Float> DAMAGE =
+            SynchedEntityData.defineId(CartEntity.class, EntityDataSerializers.FLOAT);
 
+    /** As a minecart or boat: a hit adds ten times its damage, it heals 1 a tick, and breaks beyond this. */
+    private static final float BREAK_DAMAGE = 40;
     private static final double MAX_STEP = 0.8;
     /** Animals taller than this don't fit, as in MC+ Cart. */
     private static final double MAX_ANIMAL_HEIGHT = 1.5;
@@ -99,6 +108,9 @@ public class CartEntity extends Entity {
         entityData.define(CARGO, ItemStack.EMPTY);
         entityData.define(LIT, false);
         entityData.define(PLAYING, false);
+        entityData.define(HURT_TIME, 0);
+        entityData.define(HURT_DIR, 1);
+        entityData.define(DAMAGE, 0f);
     }
 
     /** The block it carries, empty for none. */
@@ -140,6 +152,16 @@ public class CartEntity extends Entity {
         return Mth.lerp(partialTick, wheelAngleO, wheelAngle);
     }
 
+    /** How far it rocks about its length after a hit, in degrees, as a minecart or boat does. */
+    public float wobble(float partialTick) {
+        float time = entityData.get(HURT_TIME) - partialTick;
+        if (time <= 0) {
+            return 0;
+        }
+        float damage = Math.max(0, entityData.get(DAMAGE) - partialTick);
+        return Mth.sin(time) * time * damage / 10f * entityData.get(HURT_DIR);
+    }
+
     boolean isNear(Player player) {
         return isAlive() && player.distanceToSqr(this) <= 64;
     }
@@ -166,6 +188,12 @@ public class CartEntity extends Entity {
         if (isUnderWater()) {
             breakCart(true);
             return;
+        }
+        if (entityData.get(HURT_TIME) > 0) {
+            entityData.set(HURT_TIME, entityData.get(HURT_TIME) - 1);
+        }
+        if (entityData.get(DAMAGE) > 0) {
+            entityData.set(DAMAGE, Math.max(0, entityData.get(DAMAGE) - 1));
         }
         if (cargo() == CargoType.FURNACE) {
             furnace.tick(level());
@@ -375,19 +403,20 @@ public class CartEntity extends Entity {
         if (level().isClientSide || isRemoved() || isInvulnerableTo(source)) {
             return false;
         }
-        if (source.getEntity() instanceof Player player) {
-            if (player.isSecondaryUseActive() && cargo() != CargoType.NONE) {
-                dropCargo();
-            } else {
-                breakCart(!player.getAbilities().instabuild);
-            }
+        if (source.getDirectEntity() instanceof Player player && player.isSecondaryUseActive() && cargo() != CargoType.NONE) {
+            dropCargo();
             return true;
         }
-        if (source.is(DamageTypeTags.IS_EXPLOSION)) {
-            breakCart(true);
-            return true;
+        boolean creative = source.getEntity() instanceof Player player && player.getAbilities().instabuild;
+        entityData.set(HURT_DIR, -entityData.get(HURT_DIR));
+        entityData.set(HURT_TIME, 10);
+        entityData.set(DAMAGE, entityData.get(DAMAGE) + amount * 10);
+        markHurt();
+        gameEvent(GameEvent.ENTITY_DAMAGE, source.getEntity());
+        if (creative || entityData.get(DAMAGE) > BREAK_DAMAGE) {
+            breakCart(!creative);
         }
-        return false;
+        return true;
     }
 
     private void breakCart(boolean dropSelf) {

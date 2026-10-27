@@ -14,7 +14,7 @@ so it is GPL-2.0 too (see `LICENSE`). The model geometry and textures are MC+ Ca
 | Right-click it holding a chest, crafting table, ender chest, furnace or jukebox | Loads that block onto it |
 | Shift + right-click it | Uses the block: chest (27 slots), crafting, your ender chest, a furnace that smelts while you travel, or a jukebox (puts in the disc you hold, or gives it back) |
 | Right-click it while you lead a small animal | Puts the animal in (taller than 1.5 blocks doesn't fit); Shift + right-click lets it out |
-| Hit it | Breaks it: it drops itself and its load |
+| Hit it a few times, as a minecart or boat | Breaks it: it drops itself and its load (one hit in creative) |
 | Shift + hit it | Takes the block off (it drops with its contents) |
 
 - It lets go when it falls more than 6 blocks behind (stuck), and it breaks under water, as MC+ Cart's did.

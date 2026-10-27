@@ -45,6 +45,18 @@ public class CartRenderer extends EntityRenderer<CartEntity> {
     public void render(CartEntity cart, float yaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int light) {
         // Facing: +X of the turned frame points at the one pulling (the shafts' side).
         float facing = -90f - yaw;
+        float wheelRadius = (float) CartEntity.WHEEL_DIAMETER / 2;
+
+        // After a hit it rocks about its length, on the axle, as a minecart or boat does.
+        pose.pushPose();
+        float wobble = cart.wobble(partialTick);
+        if (wobble != 0) {
+            pose.translate(0, wheelRadius, 0);
+            pose.mulPose(Axis.YP.rotationDegrees(facing));
+            pose.mulPose(Axis.XP.rotationDegrees(wobble));
+            pose.mulPose(Axis.YP.rotationDegrees(-facing));
+            pose.translate(0, -wheelRadius, 0);
+        }
 
         pose.pushPose();
         pose.translate(0, BODY_HEIGHT, 0);
@@ -56,7 +68,6 @@ public class CartRenderer extends EntityRenderer<CartEntity> {
         if (wheel.isEmpty()) {
             wheel = new ItemStack(PullCartMod.WHEEL.get());
         }
-        float wheelRadius = (float) CartEntity.WHEEL_DIAMETER / 2;
         for (int side = -1; side <= 1; side += 2) {
             pose.pushPose();
             pose.translate(0, wheelRadius, 0);
@@ -79,6 +90,7 @@ public class CartRenderer extends EntityRenderer<CartEntity> {
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(cargo, pose, buffers, light, OverlayTexture.NO_OVERLAY);
             pose.popPose();
         }
+        pose.popPose();
         super.render(cart, yaw, partialTick, pose, buffers, light);
     }
 
