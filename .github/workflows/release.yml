@@ -1,0 +1,81 @@
+name: Release
+
+# A pushed v tag builds the jar of the commit it points at and creates the
+# GitHub release from it, so releasing the mod is pushing a tag.
+#
+# The tag names the version it ships rather than setting it: v1.0.0+1.21.1 for
+# mod_version=1.0.0+1.21.1. The JDK comes from the branch being built, so the
+# same file works on the 1.20 and the 1.21 line.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the build properties
+        id: props
+        run: |
+          mod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2- | tr -d '\r')
+
+          # The Java version the build itself asks for; .jabbarc is the fallback
+          java=$(grep -oE 'JavaLanguageVersion\.of\([0-9]+\)' build.gradle | grep -oE '[0-9]+' | head -1)
+          if [ -z "$java" ] && [ -f .jabbarc ]; then
+            java=$(tr -d '\r' < .jabbarc | sed -E 's/^.*@([0-9]+).*$/\1/')
+          fi
+          if [ -z "$java" ]; then
+            echo "::error::Could not read the Java version from build.gradle or .jabbarc"
+            exit 1
+          fi
+
+          {
+            echo "mod_version=$mod_version"
+            echo "java=$java"
+          } >> "$GITHUB_OUTPUT"
+
+          # A tag that disagrees with gradle.properties would ship a jar under the
+          # wrong version, so it stops here instead
+          if [ "$GITHUB_REF_NAME" != "v$mod_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match mod_version $mod_version, expected v$mod_version"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ steps.props.outputs.java }}
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew build
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOD_VERSION: ${{ steps.props.outputs.mod_version }}
+        run: |
+          # Every mod here builds <mod_id>-<mod_version>.jar, and that is the one
+          # that ships: a shadowed build leaves a -slim by-product beside it, so
+          # the whole folder is not safe to attach
+          jars=$(ls build/libs/*-"$MOD_VERSION".jar 2>/dev/null)
+          if [ -z "$jars" ]; then
+            echo "::error::build/libs holds no jar named after $MOD_VERSION"
+            ls -l build/libs
+            exit 1
+          fi
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            $jars
