@@ -1,0 +1,102 @@
+name: Publish
+
+# Sends a published GitHub release out to CurseForge and Modrinth. release.yml
+# creates that release from a pushed tag, so the two run one after the other:
+# tag -> release -> publish.
+#
+# It stays quiet until the mod actually has pages: set curseforge_id and
+# modrinth_id in gradle.properties and add CURSEFORGE_TOKEN and MODRINTH_TOKEN
+# as repository secrets. With none of them set the job builds the jar, says
+# nothing is configured and stops green.
+#
+# Run it by hand (Actions > Publish > Run workflow) to only build the jar.
+#
+# The same file serves both game lines: the versions, the loader and the JDK all
+# come from the branch being built.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the build properties
+        id: props
+        run: |
+          prop() { grep -E "^$1=" gradle.properties | cut -d= -f2- | tr -d '\r'; }
+          mod_version=$(prop mod_version)
+          {
+            echo "mod_id=$(prop mod_id)"
+            echo "mod_name=$(prop mod_name)"
+            echo "mod_version=$mod_version"
+            echo "minecraft_version=$(prop minecraft_version)"
+            echo "curseforge_id=$(prop curseforge_id)"
+            echo "modrinth_id=$(prop modrinth_id)"
+            # A branch that names a NeoForge version builds on NeoForge, the rest on Forge
+            if [ -n "$(prop neo_version)" ]; then echo "loader=neoforge"; else echo "loader=forge"; fi
+            # The Java version the build itself asks for; .jabbarc is the fallback
+            java=$(grep -oE 'JavaLanguageVersion\.of\([0-9]+\)' build.gradle | grep -oE '[0-9]+' | head -1)
+            if [ -z "$java" ] && [ -f .jabbarc ]; then
+              java=$(tr -d '\r' < .jabbarc | sed -E 's/^.*@([0-9]+).*$/\1/')
+            fi
+            echo "java=$java"
+          } >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+          # A release tag names the version it ships, it does not set it
+          if [ "$GITHUB_EVENT_NAME" = release ] && [ "$GITHUB_REF_NAME" != "v$mod_version" ]; then
+            echo "::error::Release tag $GITHUB_REF_NAME does not match mod_version $mod_version, expected v$mod_version"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ steps.props.outputs.java }}
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.props.outputs.mod_id }}-${{ steps.props.outputs.mod_version }}
+          path: build/libs/${{ steps.props.outputs.mod_id }}-*.jar
+
+      - name: Say that nothing is configured to publish to
+        if: github.event_name == 'release' && steps.props.outputs.curseforge_id == '' && steps.props.outputs.modrinth_id == ''
+        run: |
+          echo "::notice::No curseforge_id or modrinth_id in gradle.properties, so the jar was only built. The GitHub release already has it from release.yml."
+
+      - name: Upload to CurseForge and Modrinth
+        if: github.event_name == 'release' && (steps.props.outputs.curseforge_id != '' || steps.props.outputs.modrinth_id != '')
+        uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
+        with:
+          curseforge-id: ${{ steps.props.outputs.curseforge_id }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          modrinth-id: ${{ steps.props.outputs.modrinth_id }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          files: build/libs/${{ steps.props.outputs.mod_id }}-*.jar
+          name: ${{ steps.props.outputs.mod_name }} ${{ steps.props.outputs.mod_version }}
+          version: ${{ steps.props.outputs.mod_version }}
+          version-type: ${{ github.event.release.prerelease && 'beta' || 'release' }}
+          changelog: ${{ github.event.release.body }}
+          loaders: ${{ steps.props.outputs.loader }}
+          game-versions: ${{ steps.props.outputs.minecraft_version }}
+          java: ${{ steps.props.outputs.java }}
+          # Dependencies are named per site, so a mod that needs others says so here:
+          # dependencies: |
+          #   tfc(required){curseforge:302973}{modrinth:terrafirmacraft}
+          #   curios(required){curseforge:309927}{modrinth:curios}
